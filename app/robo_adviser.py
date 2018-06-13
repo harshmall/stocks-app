@@ -4,8 +4,12 @@ import json
 import os
 import pdb
 import requests
-#from IPython import embed
+import datetime
+import statistics
 
+today = datetime.date.today()
+
+#DEFINE TIME SERIES DATA
 def parse_response(response_text):
     if isinstance(response_text, str):
         response_text = json.loads(response_text)
@@ -25,6 +29,7 @@ def parse_response(response_text):
         results.append(result)
     return results
 
+#DEFINE FUNCTION TO WRITE TO CSV WITH THE TIME SERIES DATA
 def write_prices_to_file(prices=[], filename="db/prices.csv"):
     csv_filepath = os.path.join(os.path.dirname(__file__), "..", filename)
     with open(csv_filepath, "w") as csv_file:
@@ -41,48 +46,68 @@ def write_prices_to_file(prices=[], filename="db/prices.csv"):
             }
             writer.writerow(row)
 
-if __name__=='__main__':
 
-    load_dotenv() # loads environment variables set in a ".env" file, including the value of the ALPHAVANTAGE_API_KEY variable
+if __name__ == '__main__':
 
-    # see: https://www.alphavantage.co/support/#api-key
+    load_dotenv()
+
     api_key = os.environ.get("ALPHAVANTAGE_API_KEY") or "OOPS. Please set an environment variable named 'ALPHAVANTAGE_API_KEY'."
+    menu = """
+    ------------------------
+    ROBO STOCK ADVISER
+    ------------------------
+    Welcome to ROBO STOCK ADVISER
+    Access daily price information for
+    your choice of stock and get personalized recommendations.
 
-    #symbol = "NFLX" #TODO: capture user input
-    symbol = input("Please input a stock symbol (e.g. 'NFLX'):  ")
+    To get started, enter the stock symbol for a publicly-traded company.
+    ------------------------
+    """
 
-    #converted_symbool = float(symbol)
-    #if isinstance(converted_symbool, float):
-    #    print("CHECK YOUR SYMBOL. EXPECTING A NON-NUMERIC SYMBOL")
-    #    quit()
+    print(menu)
+    symbol = input("Please input a stock symbol (e.g. 'NFLX'): ")
 
-    try:
-        float(symbol)
-        quit("CHECK YOUR SYMBOL. EXPECTING A NON-NUMERIC SYMBOL")
-    except ValueError as e:
-        pass
+try:
+    float(symbol)
+    quit("CHECK YOUR SYMBOL. EXPECTING NON-NUMERIC ENTRY")
+except ValueError as e:
 
-    # see: https://www.alphavantage.co/documentation/#daily
-    # TODO: assemble the request url to get daily data for the given stock symbol
     request_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={api_key}"
-
     response = requests.get(request_url)
 
     if "Error Message" in response.text:
-        print ("REQUEST ERROR, PLEASE TRY AGAIN. CHECK YOUR STOCK SYMBOL.")
-        quit("Stopping the program")
-
+        print("REQUEST ERROR, PLEASE TRY AGAIN. CHECK YOUR STOCK SYMBOL")
+        quit("Stopping THE PROGRAM")
 
     daily_prices = parse_response(response.text)
 
     write_prices_to_file(prices=daily_prices, filename="db/prices.csv")
 
-# TODO: traverse the nested response data structure to find the latest closing price
-#metadata = response_body["Meta Data"]
-#data = response_body["Time Series (Daily)"]
-#dates = list(data)
-#latest_daily_data = data[dates[1]]
-#print(dates)
-#
-#print(f"LATEST DAILY CLOSING PRICE FOR {symbol} IS: {latest_price_usd}")
-#
+    latest_price = daily_prices[0]["close"]
+    latest_price = float(latest_price)
+    latest_price_usd = "${0:,.2f}".format(latest_price)
+
+    recent_100_highs = [float(daily_price["high"]) for daily_price in daily_prices]
+    average_recent_100_high = sum(recent_100_highs)/len(recent_100_highs)
+    average_recent_100_high_usd = "${0:,.2f}".format(average_recent_100_high)
+
+    recent_100_lows = [float(daily_price["low"]) for daily_price in daily_prices]
+    average_recent_100_low = sum(recent_100_lows)/len(recent_100_lows)
+    average_recent_100_low_usd = "${0:,.2f}".format(average_recent_100_low)
+
+
+print("    " +"AS OF:" + " " + str(today))
+print("    " + f"LATEST DAILY CLOSING FOR {symbol} IS: {latest_price_usd}")
+print("    " + f"LATEST AVERAGE HIGH FOR {symbol} IS: {average_recent_100_high_usd}")
+print("    " + f"LATEST AVERAGE LOW FOR {symbol} IS: {average_recent_100_low_usd}")
+print("    " + "--------------------")
+
+if latest_price_usd > average_recent_100_high_usd:
+   print("    " + "ROBO ADIVSER'S RECCOMENDATION IS TO SELL!")
+
+if latest_price_usd < average_recent_100_low_usd:
+    print("    " + "ROBO ADVISER'S RECCOMENDATION IS TO BUY!")
+
+if average_recent_100_low_usd < latest_price_usd < average_recent_100_high_usd:
+    print("    " + "ROBO ADVISESR'S RECCOMENDATION IS TO HOLD!")
+print("    " + "---------------------")
